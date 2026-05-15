@@ -214,8 +214,8 @@
 
     var map = L.map('map', { zoomControl: true }).setView(PERTH_CENTER, 12);
 
-https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
-attribution: '&copy; <a href="https://openstreetmap.org">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://openstreetmap.org">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
         subdomains: 'abcd',
         maxZoom: 18
     }).addTo(map);
