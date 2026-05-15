@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Fleet Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0d1117;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: #e6edf3;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+        #map { width: 100%; height: 100vh; z-index: 1; }
+
+        .header {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 1000;
+            background: linear-gradient(rgba(13,17,23,0.95) 60%, transparent);
+            padding: 12px 16px 28px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .header-title .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: #3fb950;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        .vehicle-count {
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            background: rgba(255,255,255,0.08);
+            padding: 4px 10px;
+            border-radius: 12px;
+        }
+
+        .panel {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            z-index: 1000;
+            background: linear-gradient(transparent, rgba(13,17,23,0.95) 25%);
+            padding: 30px 12px 12px;
+            max-height: 40vh;
+            overflow-y: auto;
+        }
+        .vehicle-card {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 10px 14px;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .vehicle-card:hover, .vehicle-card:active {
+            background: rgba(255,255,255,0.1);
+        }
+        .vehicle-card.offline {
+            opacity: 0.4;
+        }
+        .vehicle-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .vehicle-icon {
+            width: 36px; height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+        .vehicle-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #e6edf3;
+        }
+        .vehicle-location {
+            font-size: 11px;
+            color: rgba(255,255,255,0.4);
+            margin-top: 2px;
+        }
+        .vehicle-status {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 2px;
+        }
+        .status-badge {
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+        .status-badge.on {
+            background: rgba(63,185,80,0.15);
+            color: #3fb950;
+        }
+        .status-badge.off {
+            background: rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.3);
+        }
+        .status-badge.offline {
+            background: rgba(255,70,70,0.1);
+            color: #ff6b6b;
+        }
+        .vehicle-volts {
+            font-size: 10px;
+            color: rgba(255,255,255,0.3);
+        }
+        .last-update {
+            font-size: 9px;
+            color: rgba(255,255,255,0.2);
+            text-align: center;
+            padding: 4px;
+        }
+
+        .leaflet-control-zoom { border: none !important; }
+        .leaflet-control-zoom a {
+            background: rgba(13,17,23,0.85) !important;
+            color: #e6edf3 !important;
+            border: 1px solid rgba(255,255,255,0.1) !important;
+        }
+        .leaflet-control-attribution {
+            font-size: 8px !important;
+            background: rgba(0,0,0,0.5) !important;
+            color: rgba(255,255,255,0.3) !important;
+        }
+        .leaflet-control-attribution a {
+            color: rgba(100,150,255,0.5) !important;
+        }
+
+        .custom-marker {
+            background: none;
+            border: none;
+        }
+        .marker-pin {
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: 700;
+            color: #fff;
+            border: 2px solid rgba(255,255,255,0.3);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        }
+        .marker-pin.engine-on {
+            border-color: #3fb950;
+            box-shadow: 0 0 12px rgba(63,185,80,0.4);
+        }
+        .marker-label {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: nowrap;
+            font-size: 10px;
+            font-weight: 600;
+            color: #fff;
+            background: rgba(13,17,23,0.8);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div class="header-title">
+        <span class="dot"></span>
+        Fleet Map
+    </div>
+    <div class="vehicle-count" id="vehicleCount">Loading...</div>
+</div>
+
+<div id="map"></div>
+
+<div class="panel" id="panel"></div>
+
+<script>
+    var API_URL = 'https://app.trackmyride.com.au/v2/php/api.php';
+    var API_KEY = '6fd3fbef557e3be7c75831951fdfc568';
+    var USER_KEY = '89051de49177c589';
+    var REFRESH_MS = 60000;
+    var PERTH_CENTER = [-31.95, 115.86];
+
+    var map = L.map('map', { zoomControl: true }).setView(PERTH_CENTER, 12);
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://openstreetmap.org">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 18
+    }).addTo(map);
+
+    var markers = {};
+    var vehicleColors = [
+        '#3fb950', '#58a6ff', '#f0883e', '#bc8cff',
+        '#ff7b72', '#79c0ff', '#d2a8ff', '#ffa657',
+        '#7ee787', '#a5d6ff'
+    ];
+
+    function getTimeAgo(epoch) {
+        if (epoch < 0) return 'Never connected';
+        var now = Math.floor(Date.now() / 1000);
+        var diff = now - epoch;
+        if (diff < 60) return 'Just now';
+        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+        if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+        return Math.floor(diff / 86400) + 'd ago';
+    }
+
+    function fetchVehicles() {
+        var url = API_URL + '?api_key=' + API_KEY + '&user_key=' + USER_KEY +
+            '&module=devices&action=get&limit=1&json=1';
+
+        fetch(url)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var vehicles = [];
+                var colorIdx = 0;
+
+                for (var key in data) {
+                    var v = data[key];
+                    var hasGPS = v.aaData && v.aaData.length > 0;
+                    var lat = hasGPS ? parseFloat(v.aaData[0].lat) : null;
+                    var lng = hasGPS ? parseFloat(v.aaData[0].lng) : null;
+                    var color = vehicleColors[colorIdx % vehicleColors.length];
+
+                    vehicles.push({
+                        id: v.unique_id,
+                        name: v.name,
+                        rego: v.rego,
+                        lat: lat,
+                        lng: lng,
+                        engine: v.engine === 1,
+                        volts: v.volts,
+                        speed: hasGPS ? v.aaData[0].speed : 0,
+                        suburb: v.closest_address_suburb || '',
+                        lastEpoch: v.last_data_at_epoch,
+                        color: color,
+                        hasGPS: hasGPS
+                    });
+                    colorIdx++;
+                }
+
+                var online = vehicles.filter(function(v) { return v.hasGPS; });
+                var offline = vehicles.filter(function(v) { return !v.hasGPS; });
+
+                document.getElementById('vehicleCount').textContent =
+                    online.length + '/' + vehicles.length + ' online';
+
+                // Update markers
+                online.forEach(function(v) {
+                    if (markers[v.id]) {
+                        markers[v.id].setLatLng([v.lat, v.lng]);
+                    } else {
+                        var icon = L.divIcon({
+                            className: 'custom-marker',
+                            html: '<div class="marker-pin" style="background:' + v.color + '">' +
+                                '🚐</div>' +
+                                '<div class="marker-label">' + v.name + '</div>',
+                            iconSize: [32, 32],
+                            iconAnchor: [16, 16]
+                        });
+                        markers[v.id] = L.marker([v.lat, v.lng], { icon: icon }).addTo(map);
+                        markers[v.id].bindPopup(
+                            '<b>' + v.name + '</b><br>' +
+                            v.suburb + '<br>' +
+                            'Battery: ' + v.volts + 'V'
+                        );
+                    }
+                });
+
+                // Fit bounds to online vehicles
+                if (online.length > 0) {
+                    var bounds = L.latLngBounds(online.map(function(v) {
+                        return [v.lat, v.lng];
+                    }));
+                    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 14 });
+                }
+
+                // Build panel
+                var html = '';
+                var allVehicles = online.concat(offline);
+                allVehicles.forEach(function(v) {
+                    var isOnline = v.hasGPS;
+                    var statusClass = !isOnline ? 'offline' : (v.engine ? 'on' : 'off');
+                    var statusText = !isOnline ? 'Offline' : (v.engine ? 'Engine On' : 'Parked');
+                    var cardClass = isOnline ? '' : ' offline';
+
+                    html += '<div class="vehicle-card' + cardClass + '"' +
+                        (isOnline ? ' onclick="map.setView([' + v.lat + ',' + v.lng + '], 16)"' : '') + '>' +
+                        '<div class="vehicle-info">' +
+                        '<div class="vehicle-icon" style="background:' + v.color + '">🚐</div>' +
+                        '<div>' +
+                        '<div class="vehicle-name">' + v.name + '</div>' +
+                        '<div class="vehicle-location">' + (v.suburb || 'No location') + '</div>' +
+                        '</div></div>' +
+                        '<div class="vehicle-status">' +
+                        '<span class="status-badge ' + statusClass + '">' + statusText + '</span>' +
+                        '<span class="vehicle-volts">' + getTimeAgo(v.lastEpoch) + '</span>' +
+                        '</div></div>';
+                });
+
+                html += '<div class="last-update">Updates every 60s • Powered by Track My Ride</div>';
+                document.getElementById('panel').innerHTML = html;
+            })
+            .catch(function(err) {
+                console.error('Fleet API error:', err);
+            });
+    }
+
+    fetchVehicles();
+    setInterval(fetchVehicles, REFRESH_MS);
+</script>
+
+</body>
+</html>
