@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Perth Rain Radar</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            background: #0a0a0f;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: #e0e0e0;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        #mapid {
+            width: 100%;
+            height: 100vh;
+            z-index: 1;
+        }
+
+        /* Dark map tiles */
+        .leaflet-tile-pane {
+            filter: brightness(0.85);
+        }
+
+        .controls {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: linear-gradient(transparent, rgba(10, 10, 15, 0.95) 30%);
+            padding: 40px 16px 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .timestamp {
+            font-size: 13px;
+            font-weight: 600;
+            color: #8cb4ff;
+            letter-spacing: 0.5px;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+        }
+
+        .timestamp.forecast {
+            color: #ff9b5c;
+        }
+
+        .btn-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #e0e0e0;
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .btn:hover, .btn:active {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(140, 180, 255, 0.4);
+        }
+
+        .btn.play {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: rgba(140, 180, 255, 0.2);
+            border-color: rgba(140, 180, 255, 0.4);
+            font-size: 18px;
+        }
+
+        .btn.play.active {
+            background: rgba(140, 180, 255, 0.35);
+            border-color: rgba(140, 180, 255, 0.6);
+            box-shadow: 0 0 16px rgba(140, 180, 255, 0.2);
+        }
+
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: linear-gradient(rgba(10, 10, 15, 0.9) 60%, transparent);
+            padding: 12px 16px 30px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .header-title .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4ade80;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .legend {
+            position: fixed;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .legend-bar {
+            width: 10px;
+            height: 120px;
+            border-radius: 5px;
+            background: linear-gradient(
+                to bottom,
+                #ff0000,
+                #ff6600,
+                #ffcc00,
+                #00cc00,
+                #0099ff,
+                #3366cc
+            );
+            border: 1px solid rgba(255,255,255,0.15);
+        }
+
+        .legend-label {
+            font-size: 9px;
+            color: rgba(255,255,255,0.5);
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            letter-spacing: 1px;
+        }
+
+        .legend-top, .legend-bottom {
+            font-size: 8px;
+            color: rgba(255,255,255,0.4);
+        }
+
+        .credit {
+            font-size: 9px;
+            color: rgba(255,255,255,0.3);
+        }
+
+        .credit a {
+            color: rgba(140, 180, 255, 0.5);
+            text-decoration: none;
+        }
+
+        /* Hide leaflet attribution on mobile for cleanliness */
+        .leaflet-control-attribution {
+            font-size: 8px !important;
+            background: rgba(0,0,0,0.5) !important;
+            color: rgba(255,255,255,0.4) !important;
+        }
+        .leaflet-control-attribution a {
+            color: rgba(140, 180, 255, 0.5) !important;
+        }
+
+        .leaflet-control-zoom {
+            border: none !important;
+        }
+        .leaflet-control-zoom a {
+            background: rgba(10, 10, 15, 0.8) !important;
+            color: #e0e0e0 !important;
+            border: 1px solid rgba(255,255,255,0.1) !important;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .no-data {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 999;
+            background: rgba(10, 10, 15, 0.9);
+            padding: 16px 24px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+            font-size: 13px;
+            color: rgba(255,255,255,0.6);
+            display: none;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="header-title">
+            <span class="dot"></span>
+            Perth Rain Radar
+        </div>
+        <div class="credit">
+            <a href="https://www.rainviewer.com" target="_blank">RainViewer</a>
+        </div>
+    </div>
+
+    <div id="mapid"></div>
+
+    <div class="legend">
+        <div class="legend-top">Heavy</div>
+        <div class="legend-bar"></div>
+        <div class="legend-bottom">Light</div>
+    </div>
+
+    <div class="controls">
+        <div id="timestamp" class="timestamp">Loading radar data...</div>
+        <div class="btn-row">
+            <button class="btn" onclick="prevFrame()" title="Previous">◀</button>
+            <button class="btn play" id="playBtn" onclick="togglePlay()" title="Play/Pause">▶</button>
+            <button class="btn" onclick="nextFrame()" title="Next">▶</button>
+        </div>
+    </div>
+
+    <div class="no-data" id="noData">
+        No radar data available right now.<br>
+        Check back shortly.
+    </div>
+
+    <script>
+        // === CONFIGURATION ===
+        var PERTH_LAT = -31.95;
+        var PERTH_LNG = 115.86;
+        var DEFAULT_ZOOM = 7;
+        var TILE_SIZE = 256;
+        var RADAR_OPACITY = 0.75;
+        var ANIMATION_DELAY_MS = 600;
+        var API_URL = "https://api.rainviewer.com/public/weather-maps.json";
+        var REFRESH_INTERVAL_MS = 5 * 60 * 1000; // refresh every 5 minutes
+
+        // === STATE ===
+        var apiData = {};
+        var mapFrames = [];
+        var animationPosition = 0;
+        var animationTimer = false;
+        var currentLayer = null;
+        var isPlaying = false;
+
+        // === MAP SETUP ===
+        // Dark tile layer using CartoDB dark matter
+        var map = L.map('mapid', {
+            maxZoom: 7,
+            zoomControl: true
+        }).setView([PERTH_LAT, PERTH_LNG], DEFAULT_ZOOM);
+
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 7
+        }).addTo(map);
+
+        // === RADAR LAYER MANAGEMENT ===
+        function addRadarLayer(frame) {
+            if (!apiData.host) return;
+
+            if (currentLayer) {
+                map.removeLayer(currentLayer);
+            }
+
+            var tileUrl = apiData.host + frame.path + '/' + TILE_SIZE + '/{z}/{x}/{y}/2/1_1.png';
+
+            currentLayer = L.tileLayer(tileUrl, {
+                tileSize: TILE_SIZE,
+                opacity: RADAR_OPACITY,
+                zIndex: 10
+            });
+
+            currentLayer.addTo(map);
+        }
+
+        // === FRAME DISPLAY ===
+        function showFrame(position) {
+            if (mapFrames.length === 0) return;
+
+            // Wrap position
+            while (position >= mapFrames.length) position -= mapFrames.length;
+            while (position < 0) position += mapFrames.length;
+
+            animationPosition = position;
+            var frame = mapFrames[animationPosition];
+
+            addRadarLayer(frame);
+
+            // Update timestamp
+            var date = new Date(frame.time * 1000);
+            var hours = date.getHours().toString().padStart(2, '0');
+            var mins = date.getMinutes().toString().padStart(2, '0');
+            var day = date.getDate();
+            var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            var month = months[date.getMonth()];
+
+            var timeStr = hours + ':' + mins + ' — ' + day + ' ' + month;
+            var el = document.getElementById('timestamp');
+            el.textContent = timeStr;
+            el.className = 'timestamp';
+        }
+
+        // === ANIMATION CONTROLS ===
+        function togglePlay() {
+            if (isPlaying) {
+                stopAnimation();
+            } else {
+                startAnimation();
+            }
+        }
+
+        function startAnimation() {
+            isPlaying = true;
+            document.getElementById('playBtn').textContent = '⏸';
+            document.getElementById('playBtn').classList.add('active');
+
+            animationTimer = setInterval(function() {
+                showFrame(animationPosition + 1);
+            }, ANIMATION_DELAY_MS);
+        }
+
+        function stopAnimation() {
+            isPlaying = false;
+            document.getElementById('playBtn').textContent = '▶';
+            document.getElementById('playBtn').classList.remove('active');
+
+            if (animationTimer) {
+                clearInterval(animationTimer);
+                animationTimer = false;
+            }
+        }
+
+        function prevFrame() {
+            stopAnimation();
+            showFrame(animationPosition - 1);
+        }
+
+        function nextFrame() {
+            stopAnimation();
+            showFrame(animationPosition + 1);
+        }
+
+        // === API DATA LOADING ===
+        function loadRadarData() {
+            fetch(API_URL)
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    apiData = data;
+                    mapFrames = [];
+
+                    // Add past radar frames
+                    if (data.radar && data.radar.past) {
+                        mapFrames = mapFrames.concat(data.radar.past);
+                    }
+
+                    if (mapFrames.length === 0) {
+                        document.getElementById('noData').style.display = 'block';
+                        return;
+                    }
+
+                    document.getElementById('noData').style.display = 'none';
+
+                    // Show the most recent frame
+                    showFrame(mapFrames.length - 1);
+
+                    // Auto-play
+                    startAnimation();
+                })
+                .catch(function(err) {
+                    console.error('Failed to load radar data:', err);
+                    document.getElementById('noData').style.display = 'block';
+                });
+        }
+
+        // === INIT ===
+        loadRadarData();
+
+        // Refresh data periodically
+        setInterval(loadRadarData, REFRESH_INTERVAL_MS);
+    </script>
+</body>
+</html>
